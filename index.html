@@ -3,145 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHE v0.0.4</title>
+    <title>PHE v0.0.6 - Sniper</title>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        #init-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; box-sizing: border-box; }
-        #start-btn { padding: 15px 40px; font-size: 20px; background: #007bff; color: #fff; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; font-weight: bold; }
-        #anchor-guide { position: absolute; top: 20px; left: 20px; width: 150px; height: 70px; border: 2px dashed #f00; color: #f00; font-size: 11px; padding: 5px; pointer-events: none; }
-        #shutter { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 75px; height: 75px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,0.2); z-index: 60; }
-        #results { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #05050a; display: none; z-index: 500; padding: 20px; box-sizing: border-box; overflow-y: auto; }
-        .log { font-family: monospace; font-size: 11px; color: #0f0; background: #111; padding: 10px; border-radius: 4px; margin: 10px 0; border-left: 3px solid #0f0; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #222; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Top 70% - Viewfinder */
+        #top-half { position: relative; height: 70%; width: 100%; background: #000; overflow: hidden; }
+        #viewfinder { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* The Sniper Box */
+        #sniper-box { position: absolute; top: 10%; left: 5%; width: 90%; height: 80%; border: 4px solid #0f0; pointer-events: none; box-shadow: 0 0 10px #0f0, inset 0 0 10px #0f0; }
+        
+        /* Status Overlay */
+        #status-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 15px 25px; border-radius: 8px; font-weight: bold; font-size: 24px; text-align: center; z-index: 10; display: none; background: rgba(0,0,0,0.7); }
+        .status-yellow { color: #ff0; border: 2px solid #ff0; }
+        .status-green { color: #0f0; border: 2px solid #0f0; }
+        .status-scroll { color: #fff; border: 2px solid #fff; font-size: 18px !important; }
+
+        /* Bottom 30% - Controls */
+        #bottom-half { height: 30%; width: 100%; background: #ccc; color: #000; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #bottom-title { font-size: 18px; font-weight: bold; margin-bottom: 20px; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }
+        .btn-row { display: flex; gap: 20px; width: 100%; max-width: 400px; justify-content: center; }
+        .btn { padding: 15px 30px; font-size: 22px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #fff; flex: 1; }
+        #btn-start-over { background: #e00; }
+        #btn-finish { background: #007bff; }
+
+        /* Results Screen */
+        #results-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 100; display: none; padding: 20px; overflow-y: auto; color: #fff; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #222; }
-        .confidence-high { color: #0f0; font-weight: bold; }
-        .close-btn { background: #333; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; float: right; cursor: pointer; }
-        .pill { background: #060; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #333; }
+        .pill { background: #060; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        #btn-close-results { background: #444; color: #fff; padding: 10px; border: none; border-radius: 5px; float: right; margin-bottom: 20px; }
+
+        /* Hidden processing canvas */
+        #motion-canvas, #capture-canvas { display: none; }
+        
+        #security-warning { display: none; background: #c00; padding: 20px; text-align: center; color: white; position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; }
     </style>
 </head>
 <body>
 
-    <div id="init-layer">
-        <h2>🦅 PROJECT HAWK EYE <small>v0.0.4</small></h2>
-        <p>Targeting WARP "Available" Pills</p>
-        <button id="start-btn">IGNITION</button>
+    <div id="security-warning"><b>SECURITY LOCK:</b> Host this on HTTPS or Localhost!</div>
+
+    <div id="top-half">
+        <video id="viewfinder" autoplay playsinline></video>
+        <div id="sniper-box"></div>
+        <div id="status-overlay"></div>
     </div>
 
-    <video id="viewfinder" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
-    <div id="anchor-guide">ALIGN 'INVENTORY' HERE</div>
-    <button id="shutter"></button>
+    <div id="bottom-half">
+        <div id="bottom-title">T-Mobile input scan</div>
+        <div class="btn-row">
+            <button id="btn-start-over" class="btn">Start over</button>
+            <button id="btn-finish" class="btn">Finish</button>
+        </div>
+    </div>
 
-    <div id="results">
-        <button class="close-btn" onclick="location.reload()">RESCAN [X]</button>
-        <h3>🦅 PHE TABLET ANALYSIS</h3>
-        <div id="status-log" class="log">Waiting for capture...</div>
+    <div id="results-screen">
+        <button id="btn-close-results">New Session [X]</button>
+        <h2>🦅 T-MOBILE MASTER INVENTORY</h2>
         <table>
-            <thead><tr><th>Device Model</th><th>Status</th><th>Confidence</th></tr></thead>
-            <tbody id="data-body"></tbody>
+            <thead><tr><th>Device Model</th><th>Quantity</th></tr></thead>
+            <tbody id="master-data-body"></tbody>
         </table>
     </div>
 
-    <canvas id="hidden-canvas" style="display:none;"></canvas>
+    <canvas id="motion-canvas" width="64" height="64"></canvas>
+    <canvas id="capture-canvas"></canvas>
 
     <script>
         const video = document.getElementById('viewfinder');
-        const startBtn = document.getElementById('start-btn');
-        const initLayer = document.getElementById('init-layer');
-        const statusLog = document.getElementById('status-log');
-        const dataBody = document.getElementById('data-body');
-        const canvas = document.getElementById('hidden-canvas');
-
-        const API_KEY = 'YOUR_OCR_SPACE_KEY';
-        const ANCHOR = 'inventory';
+        const overlay = document.getElementById('status-overlay');
+        const motionCanvas = document.getElementById('motion-canvas');
+        const captureCanvas = document.getElementById('capture-canvas');
+        const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
         
-        // v0.0.4 Session memory for voting
-        let sessionHistory = {};
+        const API_KEY = 'YOUR_OCR_SPACE_KEY'; // ENTER OCR.SPACE KEY HERE
+        
+        let masterInventory = {};
+        let state = 'INIT'; // INIT, HUNTING, GOOD, API_LOCK, SCROLL
+        let steadyFrames = 0;
+        let lastImageData = null;
+        let motionInterval = null;
 
-        startBtn.onclick = async () => {
+        if (!window.isSecureContext && location.hostname !== "localhost") {
+            document.getElementById('security-warning').style.display = 'block';
+        }
+
+        async function initCamera() {
             try {
                 video.srcObject = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: 'environment', width: { ideal: 1920 } } 
                 });
-                initLayer.style.display = 'none';
+                state = 'HUNTING';
+                startMotionDetection();
             } catch (e) {
-                alert("Security block or hardware failure. Use HTTPS/Localhost.");
+                alert("Camera blocked. Check permissions.");
             }
-        };
+        }
 
-        document.getElementById('shutter').onclick = async () => {
-            document.getElementById('results').style.display = 'block';
-            statusLog.innerText = ">>> DEFUSING MOIRÉ LINES & CAPTURING...";
+        function updateOverlay(text, cssClass) {
+            overlay.className = cssClass;
+            overlay.innerText = text;
+            overlay.style.display = 'block';
+        }
+
+        function startMotionDetection() {
+            motionInterval = setInterval(() => {
+                if (state === 'API_LOCK' || state === 'INIT') return;
+
+                motionCtx.drawImage(video, 0, 0, 64, 64);
+                let currentData = motionCtx.getImageData(0, 0, 64, 64).data;
+                let motionScore = 0;
+
+                if (lastImageData) {
+                    for (let i = 0; i < currentData.length; i += 16) {
+                        motionScore += Math.abs(currentData[i] - lastImageData[i]);
+                    }
+                }
+                lastImageData = currentData;
+
+                // Threshold logic
+                if (motionScore > 1500) {
+                    // Moving
+                    if (state === 'SCROLL') {
+                        state = 'HUNTING'; // They scrolled, start hunting again
+                    }
+                    if (state === 'HUNTING') {
+                        steadyFrames = 0;
+                        updateOverlay("✔️ HOLD\nSTEADY", "status-yellow");
+                    }
+                } else {
+                    // Steady
+                    if (state === 'HUNTING') {
+                        steadyFrames++;
+                        if (steadyFrames >= 5) { // Roughly 1 second of stillness
+                            state = 'GOOD';
+                            updateOverlay("✔️ IMAGE\nGOOD", "status-green");
+                            setTimeout(fireSilentCapture, 500); // let UI update before freezing thread
+                        }
+                    }
+                }
+            }, 200);
+        }
+
+        async function fireSilentCapture() {
+            state = 'API_LOCK'; // Lock to prevent multi-fires
             
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // v0.0.4 Anti-glare pipeline
+            const ctx = captureCanvas.getContext('2d');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
             ctx.filter = 'grayscale(1) contrast(1.6) brightness(1.1) sharpen(1.0)';
             ctx.drawImage(video, 0, 0);
 
-            const base64 = canvas.toDataURL('image/jpeg', 0.80);
             const fd = new FormData();
-            fd.append('base64Image', base64);
+            fd.append('base64Image', captureCanvas.toDataURL('image/jpeg', 0.8));
             fd.append('apikey', API_KEY);
-            fd.append('OCREngine', '2'); // Best for screen text
-            fd.append('isOverlayRequired', 'true'); // Required for Spatial Row Grouping
+            fd.append('OCREngine', '2');
+            fd.append('isOverlayRequired', 'true');
 
             try {
                 const res = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: fd });
                 const json = await res.json();
                 
-                if (json.IsErroredOnProcessing) {
-                    statusLog.innerText = "SERVER ERROR: " + json.ErrorMessage;
-                } else {
-                    parseSpatial(json.ParsedResults[0]);
+                if (json.ParsedResults && json.ParsedResults.length > 0) {
+                    extractTMobileData(json.ParsedResults[0]);
                 }
+                
+                // Prompt user to scroll
+                state = 'SCROLL';
+                steadyFrames = 0;
+                updateOverlay("SCROLL DOWN ON TABLET\nOR PRESS FINISH IF DONE", "status-scroll");
+                
             } catch (err) {
-                statusLog.innerText = "NETWORK KILLED: " + err.message;
+                console.error("API Crash:", err);
+                state = 'HUNTING'; // Failed, try again
             }
-        };
+        }
 
-        function parseSpatial(result) {
-            const lines = result.TextOverlay.Lines;
-            let count = 0;
-            let anchorHit = false;
+        function extractTMobileData(result) {
+            if (!result.TextOverlay) return;
             
-            // v0.0.4 Spatial Grouping Logic
-            // We group words by their Top coordinate to find "Rows"
             const rows = {};
-            lines.forEach(line => {
-                const top = Math.round(line.Words[0].Top / 10) * 10; // 10px tolerance
+            result.TextOverlay.Lines.forEach(line => {
+                const top = Math.round(line.Words[0].Top / 15) * 15; // Grouping tolerance
                 if (!rows[top]) rows[top] = "";
                 rows[top] += " " + line.LineText;
-                if (line.LineText.toLowerCase().includes(ANCHOR)) anchorHit = true;
             });
 
             Object.values(rows).forEach(rowText => {
-                // v0.0.4 WARP Pill Regex: Look for the "Available" string specifically
                 const pillMatch = rowText.match(/(\d+)\s+Available/i);
                 if (pillMatch) {
                     const qty = pillMatch[1];
-                    // Clean the name by removing the status pill text
-                    const name = rowText.replace(pillMatch[0], '').replace(ANCHOR, '').trim();
-                    
+                    let name = rowText.replace(pillMatch[0], '').replace(/inventory/i, '').trim();
                     if (name.length > 3) {
-                        // Voting Logic
-                        sessionHistory[name] = (sessionHistory[name] || 0) + 1;
-                        const isHighConf = sessionHistory[name] > 1;
-                        
-                        const row = `<tr>
-                            <td>${name}</td>
-                            <td><span class="pill">${qty} Available</span></td>
-                            <td class="${isHighConf ? 'confidence-high' : ''}">${isHighConf ? 'VOTED' : 'NEW'}</td>
-                        </tr>`;
-                        dataBody.innerHTML += row;
-                        count++;
+                        // Deduplication: Just update/overwrite if it exists
+                        masterInventory[name] = qty;
                     }
                 }
             });
-
-            statusLog.innerText = `RESULT: [ANCHOR: ${anchorHit ? 'YES' : 'NO'}] | [PILLS FOUND: ${count}]`;
         }
+
+        // Button Controls
+        document.getElementById('btn-finish').onclick = () => {
+            clearInterval(motionInterval);
+            video.srcObject.getTracks().forEach(track => track.stop());
+            
+            const tbody = document.getElementById('master-data-body');
+            tbody.innerHTML = '';
+            
+            for (const [device, qty] of Object.entries(masterInventory)) {
+                tbody.innerHTML += `<tr><td>${device}</td><td><span class="pill">${qty}</span></td></tr>`;
+            }
+            
+            document.getElementById('results-screen').style.display = 'block';
+        };
+
+        document.getElementById('btn-start-over').onclick = () => {
+            masterInventory = {};
+            state = 'HUNTING';
+            steadyFrames = 0;
+            updateOverlay("✔️ HOLD\nSTEADY", "status-yellow");
+        };
+
+        document.getElementById('btn-close-results').onclick = () => {
+            location.reload();
+        };
+
+        initCamera();
     </script>
 </body>
 </html>
