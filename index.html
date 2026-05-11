@@ -2,219 +2,213 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PHE v0.0.7 - Primer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project IRIS - Scanner</title>
+    <!-- Import Tesseract.js v5 -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; background: #222; color: #fff; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        
-        /* Top 70% - Viewfinder */
-        #top-half { position: relative; height: 70%; width: 100%; background: #000; overflow: hidden; }
-        #viewfinder { width: 100%; height: 100%; object-fit: cover; }
-        
-        /* The Sniper Box */
-        #sniper-box { position: absolute; top: 10%; left: 5%; width: 90%; height: 75%; border: 4px solid #0f0; pointer-events: none; box-shadow: 0 0 10px #0f0, inset 0 0 10px #0f0; transition: all 0.2s; }
-        .flash-capture { border-color: #fff !important; box-shadow: 0 0 30px #fff, inset 0 0 30px #fff !important; background: rgba(255,255,255,0.2); }
-        .locked-state { border-color: #555 !important; box-shadow: none !important; }
-
-        /* The Blue Nav Guide */
-        #blue-guide { position: absolute; bottom: 0; left: 0; width: 100%; height: 10%; background: rgba(0, 50, 150, 0.6); border-top: 2px solid #0055ff; display: flex; align-items: center; justify-content: center; gap: 40px; pointer-events: none; }
-        .fake-back { width: 0; height: 0; border-top: 10px solid transparent; border-bottom: 10px solid transparent; border-right: 15px solid rgba(255,255,255,0.7); }
-        .fake-home { width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,0.7); }
-
-        /* Bottom 30% - Controls */
-        #bottom-half { height: 30%; width: 100%; background: #ccc; color: #000; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        #bottom-title { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
-        .btn-row { display: flex; gap: 20px; width: 100%; max-width: 400px; justify-content: center; }
-        .btn { padding: 15px 30px; font-size: 22px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #fff; flex: 1; }
-        #btn-start-over { background: #e00; }
-        #btn-finish { background: #007bff; }
-
-        /* Results Screen */
-        #results-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 100; display: none; padding: 20px; overflow-y: auto; color: #fff; }
-        .log-entry { background: #222; padding: 12px; margin-bottom: 10px; border-left: 4px solid #0f0; font-family: monospace; border-radius: 4px; word-wrap: break-word; }
-        #btn-close-results { background: #444; color: #fff; padding: 10px; border: none; border-radius: 5px; float: right; margin-bottom: 20px; }
-
-        /* Hidden processing canvas */
-        #motion-canvas, #capture-canvas { display: none; }
-        #security-warning { display: none; background: #c00; padding: 20px; text-align: center; color: white; position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+            color: #4CAF50;
+        }
+        #status {
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #ffeb3b;
+        }
+        .video-container {
+            width: 100%;
+            max-width: 500px;
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 15px;
+        }
+        video {
+            width: 100%;
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            max-width: 500px;
+            height: 120px;
+            background: #1e1e1e;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 1rem;
+            resize: none;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 500px;
+        }
+        button {
+            flex: 1;
+            padding: 15px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:active {
+            opacity: 0.7;
+        }
+        #copyBtn {
+            background-color: #2196F3;
+            color: white;
+        }
+        #resumeBtn {
+            background-color: #f44336;
+            color: white;
+        }
+        /* Hidden canvas for grabbing video frames */
+        #hiddenCanvas {
+            display: none;
+        }
     </style>
 </head>
 <body>
 
-    <div id="security-warning"><b>SECURITY LOCK:</b> Host this on HTTPS or Localhost!</div>
+    <h1>Project IRIS</h1>
+    <div id="status">Initializing Camera & AI...</div>
 
-    <div id="top-half">
-        <video id="viewfinder" autoplay playsinline></video>
-        <div id="sniper-box"></div>
-        <div id="blue-guide">
-            <div class="fake-back"></div>
-            <div class="fake-home"></div>
-        </div>
+    <div class="video-container">
+        <!-- playsinline is critical for iOS Safari -->
+        <video id="cameraFeed" autoplay playsinline></video>
     </div>
 
-    <div id="bottom-half">
-        <div id="bottom-title">Raw Text Primer (Dumb Mode)</div>
-        <div class="btn-row">
-            <button id="btn-start-over" class="btn">Start over</button>
-            <button id="btn-finish" class="btn">Finish</button>
-        </div>
+    <textarea id="output" placeholder="Scanned text will appear here..." readonly></textarea>
+
+    <div class="controls">
+        <button id="copyBtn">Copy to Clipboard</button>
+        <button id="resumeBtn">Resume Scan</button>
     </div>
 
-    <div id="results-screen">
-        <button id="btn-close-results">New Session [X]</button>
-        <h2>🦅 RAW TEXT CAPTURES</h2>
-        <div id="master-data-body"></div>
-    </div>
-
-    <canvas id="motion-canvas" width="64" height="64"></canvas>
-    <canvas id="capture-canvas"></canvas>
+    <canvas id="hiddenCanvas"></canvas>
 
     <script>
-        const video = document.getElementById('viewfinder');
-        const sniperBox = document.getElementById('sniper-box');
-        const motionCanvas = document.getElementById('motion-canvas');
-        const captureCanvas = document.getElementById('capture-canvas');
-        const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
-        
-        // Don't forget to put your actual key here, I left it blank so I don't leak it!
-        const API_KEY = 'K83239282988957'; 
-        
-        let masterScans = [];
-        let state = 'INIT'; // INIT, HUNTING, API_LOCK, WAIT_FOR_MOTION
-        let steadyFrames = 0;
-        let lastImageData = null;
-        let motionInterval = null;
+        const video = document.getElementById('cameraFeed');
+        const canvas = document.getElementById('hiddenCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
+        const outputEl = document.getElementById('output');
+        const copyBtn = document.getElementById('copyBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
 
-        if (!window.isSecureContext && location.hostname !== "localhost") {
-            document.getElementById('security-warning').style.display = 'block';
-        }
+        let worker = null;
+        let isScanning = false;
 
-        async function initCamera() {
+        async function initApp() {
             try {
-                video.srcObject = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment', width: { ideal: 1920 } } 
+                // 1. Request Camera (Rear camera preferred)
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
                 });
-                state = 'HUNTING';
-                startMotionDetection();
-            } catch (e) {
-                alert("Camera blocked. Check permissions.");
+                video.srcObject = stream;
+
+                // 2. Initialize Tesseract
+                worker = await Tesseract.createWorker('eng');
+                
+                // 3. Start Scanning Loop
+                startScanning();
+
+            } catch (err) {
+                console.error(err);
+                statusEl.innerText = "Error: Camera access denied or unsupported.";
+                statusEl.style.color = "#f44336";
             }
         }
 
-        function startMotionDetection() {
-            motionInterval = setInterval(() => {
-                if (state === 'API_LOCK' || state === 'INIT') return;
-
-                motionCtx.drawImage(video, 0, 0, 64, 64);
-                let currentData = motionCtx.getImageData(0, 0, 64, 64).data;
-                let motionScore = 0;
-
-                if (lastImageData) {
-                    for (let i = 0; i < currentData.length; i += 16) {
-                        motionScore += Math.abs(currentData[i] - lastImageData[i]);
-                    }
-                }
-                lastImageData = currentData;
-
-                if (motionScore > 1500) {
-                    // Moving
-                    if (state === 'WAIT_FOR_MOTION') {
-                        // They scrolled! Reset the sniper and start hunting again.
-                        sniperBox.classList.remove('locked-state');
-                        state = 'HUNTING';
-                    }
-                    if (state === 'HUNTING') steadyFrames = 0;
-                } else {
-                    // Steady
-                    if (state === 'HUNTING') {
-                        steadyFrames++;
-                        if (steadyFrames >= 5) { // Roughly 1 second of stillness
-                            fireSilentCapture();
-                        }
-                    }
-                }
-            }, 200);
+        function startScanning() {
+            isScanning = true;
+            statusEl.innerText = "Scanning...";
+            statusEl.style.color = "#ffeb3b";
+            outputEl.value = "";
+            scanFrame(); // Trigger the loop
         }
 
-        async function fireSilentCapture() {
-            state = 'API_LOCK'; 
-            
-            // UI Feedback: Flash the box, then dim it to show it's locked
-            sniperBox.classList.add('flash-capture');
-            setTimeout(() => {
-                sniperBox.classList.remove('flash-capture');
-                sniperBox.classList.add('locked-state');
-            }, 300);
+        async function scanFrame() {
+            if (!isScanning) return;
 
-            const ctx = captureCanvas.getContext('2d');
-            captureCanvas.width = video.videoWidth;
-            captureCanvas.height = video.videoHeight;
-            // Removed aggressive filters to just focus on reading raw text
-            ctx.drawImage(video, 0, 0);
+            // Wait until video has dimensions
+            if (video.videoWidth === 0) {
+                setTimeout(scanFrame, 500);
+                return;
+            }
 
-            const fd = new FormData();
-            fd.append('base64Image', captureCanvas.toDataURL('image/jpeg', 0.8));
-            fd.append('apikey', API_KEY);
-            fd.append('OCREngine', '2'); 
+            // Copy current video frame to canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             try {
-                const res = await fetch('https://api.ocr.space/parse/image', { method: 'POST', body: fd });
-                const json = await res.json();
-                
-                // CRASH SHIELD: Check if the response actually has data
-                if (!json.IsErroredOnProcessing && json.ParsedResults && json.ParsedResults.length > 0) {
-                    extractDumbText(json.ParsedResults[0]);
-                } else {
-                    console.warn("OCR returned empty or errored. Screen might be blank.");
+                // Pass the canvas to Tesseract for OCR
+                const { data: { text } } = await worker.recognize(canvas);
+                const cleanedText = text.trim();
+
+                // If we found a reasonable amount of text, stop and display
+                if (cleanedText.length > 5) {
+                    completeScan(cleanedText);
+                    return; // Break out of the loop
                 }
             } catch (err) {
-                console.error("API Crash:", err);
+                console.error("OCR Error:", err);
             }
 
-            // Tell the loop to wait until you physically move the camera before taking another shot
-            state = 'WAIT_FOR_MOTION';
-            steadyFrames = 0;
-        }
-
-        function extractDumbText(result) {
-            // Literally just grabs everything the API saw and shoves it into a string
-            if (!result.TextOverlay) return;
-            
-            let rawLines = result.TextOverlay.Lines.map(l => l.LineText).join(' | ');
-            if (rawLines.trim().length > 0) {
-                masterScans.push(rawLines);
+            // Loop again after a short delay to prevent freezing the browser
+            if (isScanning) {
+                setTimeout(scanFrame, 800);
             }
         }
 
-        // Controls
-        document.getElementById('btn-finish').onclick = () => {
-            clearInterval(motionInterval);
-            video.srcObject.getTracks().forEach(track => track.stop());
-            
-            const tbody = document.getElementById('master-data-body');
-            tbody.innerHTML = '';
-            
-            masterScans.forEach((scan, index) => {
-                tbody.innerHTML += `<div class="log-entry"><strong>Capture ${index + 1}:</strong> ${scan}</div>`;
-            });
-            
-            document.getElementById('results-screen').style.display = 'block';
-        };
+        function completeScan(resultText) {
+            isScanning = false;
+            statusEl.innerText = "Complete!";
+            statusEl.style.color = "#4CAF50";
+            outputEl.value = resultText;
+        }
 
-        document.getElementById('btn-start-over').onclick = () => {
-            masterScans = [];
-            state = 'HUNTING';
-            steadyFrames = 0;
-            sniperBox.classList.remove('locked-state');
-            sniperBox.classList.remove('flash-capture');
-        };
+        // Button Listeners
+        copyBtn.addEventListener('click', async () => {
+            if (!outputEl.value) return;
+            try {
+                await navigator.clipboard.writeText(outputEl.value);
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = "Copied!";
+                setTimeout(() => copyBtn.innerText = originalText, 2000);
+            } catch (err) {
+                alert("Failed to copy text. Please copy manually.");
+            }
+        });
 
-        document.getElementById('btn-close-results').onclick = () => {
-            location.reload();
-        };
+        resumeBtn.addEventListener('click', () => {
+            if (!isScanning) {
+                startScanning();
+            }
+        });
 
-        initCamera();
+        // Bootstrap the app
+        window.addEventListener('load', initApp);
     </script>
 </body>
 </html>
