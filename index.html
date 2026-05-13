@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Project IRIS - Scanner</title>
     
     <!-- Favicons -->
@@ -20,21 +20,40 @@
             background-color: #121212;
             color: #ffffff;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
+            /* 100dvh guarantees it fits the mobile screen exactly without scrolling */
+            height: 100vh;
+            height: 100dvh; 
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             align-items: center;
+            overflow: hidden;
         }
+        
+        #versionLabel {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            color: #666;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
         h1 {
             font-size: 1.5rem;
+            margin-top: 0;
             margin-bottom: 5px;
             color: #4CAF50;
+            flex-shrink: 0;
         }
+        
         #status {
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             color: #ffeb3b;
             text-align: center;
+            flex-shrink: 0;
         }
         
         /* Video & Reticle Container */
@@ -46,32 +65,36 @@
             border-radius: 10px;
             overflow: hidden;
             background: #000;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-shrink: 0;
+            cursor: pointer; /* Indicates tap-to-focus */
         }
+        
         video {
             width: 100%;
             display: block;
         }
         
-        /* The Targeting Box */
+        /* The 1:1 Square Targeting Box */
         #reticle {
             position: absolute;
-            width: 80%;
-            height: 25%;
+            width: 60%;
+            aspect-ratio: 1 / 1;
             border: 3px solid #00ff00;
-            /* This shadow creates a dimming effect outside the box */
             box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
-            pointer-events: none; /* Lets you tap through it if needed */
+            pointer-events: none;
             box-sizing: border-box;
         }
 
+        /* Flex-grow makes the textarea act as a shock absorber for the remaining space */
         textarea {
             width: 100%;
             max-width: 500px;
-            height: 150px;
+            flex-grow: 1;
+            min-height: 60px;
             background: #1e1e1e;
             color: #fff;
             border: 1px solid #444;
@@ -80,7 +103,7 @@
             font-size: 1rem;
             resize: none;
             box-sizing: border-box;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .controls {
@@ -89,9 +112,11 @@
             gap: 10px;
             width: 100%;
             max-width: 500px;
+            flex-shrink: 0;
         }
+        
         button {
-            padding: 15px;
+            padding: 12px;
             font-size: 1rem;
             font-weight: bold;
             border: none;
@@ -99,9 +124,7 @@
             cursor: pointer;
             transition: opacity 0.2s;
         }
-        button:active {
-            opacity: 0.7;
-        }
+        button:active { opacity: 0.7; }
         button:disabled {
             background-color: #555 !important;
             color: #888 !important;
@@ -113,8 +136,8 @@
             flex-basis: 100%;
             background-color: #4CAF50;
             color: white;
-            margin-bottom: 5px;
             font-size: 1.2rem;
+            padding: 15px;
         }
         #copyBtn {
             flex: 1;
@@ -126,6 +149,13 @@
             background-color: #f44336;
             color: white;
         }
+        #toggleCamBtn {
+            flex-basis: 100%;
+            background-color: #333;
+            color: #bbb;
+            padding: 10px;
+            font-size: 0.9rem;
+        }
         
         /* Hidden canvas for cropping */
         #hiddenCanvas {
@@ -135,10 +165,11 @@
 </head>
 <body>
 
+    <div id="versionLabel">v0.3.0</div>
     <h1>Project IRIS</h1>
     <div id="status">Initializing Camera & AI...</div>
 
-    <div class="video-container">
+    <div class="video-container" id="videoContainer">
         <video id="cameraFeed" autoplay playsinline></video>
         <div id="reticle"></div>
     </div>
@@ -149,12 +180,14 @@
         <button id="scanBtn" disabled>Scan Target</button>
         <button id="copyBtn">Copy List</button>
         <button id="clearBtn">Clear List</button>
+        <button id="toggleCamBtn">Toggle Camera</button>
     </div>
 
     <canvas id="hiddenCanvas"></canvas>
 
     <script>
         const video = document.getElementById('cameraFeed');
+        const videoContainer = document.getElementById('videoContainer');
         const canvas = document.getElementById('hiddenCanvas');
         const ctx = canvas.getContext('2d');
         const statusEl = document.getElementById('status');
@@ -162,87 +195,144 @@
         const scanBtn = document.getElementById('scanBtn');
         const copyBtn = document.getElementById('copyBtn');
         const clearBtn = document.getElementById('clearBtn');
+        const toggleCamBtn = document.getElementById('toggleCamBtn');
         const reticle = document.getElementById('reticle');
 
         let worker = null;
+        let currentStream = null;
 
         async function initApp() {
             try {
-                // 1. Request Camera
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                });
-                video.srcObject = stream;
-
-                // 2. Initialize Tesseract
+                // Initialize Tesseract first
                 worker = await Tesseract.createWorker('eng');
                 
-                // 3. Ready State
+                // Start the camera
+                await startCamera();
+                
                 statusEl.innerText = "Ready. Align text in box and Scan.";
                 statusEl.style.color = "#4CAF50";
                 scanBtn.disabled = false;
-
             } catch (err) {
                 console.error(err);
-                statusEl.innerText = "Error: Camera access denied or unsupported.";
+                statusEl.innerText = "Error: Initialization failed.";
                 statusEl.style.color = "#f44336";
             }
         }
 
-        scanBtn.addEventListener('click', async () => {
-            if (!worker) return;
+        async function startCamera() {
+            if (currentStream) return;
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment',
+                        advanced: [{ focusMode: "continuous" }]
+                    }
+                });
+                video.srcObject = currentStream;
+            } catch (err) {
+                console.error("Camera start error:", err);
+                statusEl.innerText = "Error: Camera access denied.";
+                statusEl.style.color = "#f44336";
+            }
+        }
 
-            // UI Feedback
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+                video.srcObject = null;
+            }
+        }
+
+        // --- Event Listeners for Camera Lifecycle ---
+
+        // 1. Backgrounding (Visibility API)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        });
+
+        // 2. Manual Toggle
+        toggleCamBtn.addEventListener('click', () => {
+            if (currentStream) {
+                stopCamera();
+                statusEl.innerText = "Camera Paused.";
+                statusEl.style.color = "#ff9800";
+            } else {
+                startCamera();
+                statusEl.innerText = "Ready. Align text in box and Scan.";
+                statusEl.style.color = "#4CAF50";
+            }
+        });
+
+        // 3. Tap to Focus
+        videoContainer.addEventListener('click', async () => {
+            if (!currentStream) return;
+            const track = currentStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            
+            // Provide a quick visual flash to indicate tap was registered
+            videoContainer.style.borderColor = "#00ff00";
+            setTimeout(() => videoContainer.style.borderColor = "#333", 300);
+
+            if (capabilities.focusMode) {
+                try {
+                    await track.applyConstraints({
+                        advanced: [{ focusMode: "continuous" }]
+                    });
+                } catch (err) {
+                    console.log("Manual focus constraint not supported on this device.");
+                }
+            }
+        });
+
+        // --- Core Scanning Logic ---
+
+        scanBtn.addEventListener('click', async () => {
+            if (!worker || !currentStream) return;
+
             scanBtn.disabled = true;
             statusEl.innerText = "Scanning crop...";
             statusEl.style.color = "#ffeb3b";
 
-            // Safety check
             if (video.videoWidth === 0) {
                 scanBtn.disabled = false;
                 return;
             }
 
-            // --- THE CROP MATH ---
-            // 1. Get the actual rendered size of the video and the reticle on screen
             const videoRect = video.getBoundingClientRect();
             const reticleRect = reticle.getBoundingClientRect();
 
-            // 2. Calculate the scale difference between the screen size and the raw camera feed size
             const scaleX = video.videoWidth / videoRect.width;
             const scaleY = video.videoHeight / videoRect.height;
 
-            // 3. Calculate the exact X/Y and Width/Height of the crop relative to the raw camera feed
             const sourceX = (reticleRect.left - videoRect.left) * scaleX;
             const sourceY = (reticleRect.top - videoRect.top) * scaleY;
             const sourceW = reticleRect.width * scaleX;
             const sourceH = reticleRect.height * scaleY;
 
-            // 4. Resize canvas to match the exact crop dimensions
             canvas.width = sourceW;
             canvas.height = sourceH;
 
-            // 5. Draw ONLY the cropped area to the canvas
             ctx.drawImage(
                 video, 
-                sourceX, sourceY, sourceW, sourceH, // Source (Camera Feed)
-                0, 0, sourceW, sourceH              // Destination (Canvas)
+                sourceX, sourceY, sourceW, sourceH,
+                0, 0, sourceW, sourceH
             );
 
             try {
-                // Send the tiny cropped canvas to Tesseract
                 const { data: { text } } = await worker.recognize(canvas);
                 const cleanedText = text.trim();
 
                 if (cleanedText) {
-                    // Append logic: Add a line break if text already exists
                     if (outputEl.value) {
                         outputEl.value += '\n' + cleanedText;
                     } else {
                         outputEl.value = cleanedText;
                     }
-                    
-                    // Auto-scroll to the bottom of the text box
                     outputEl.scrollTop = outputEl.scrollHeight;
                     
                     statusEl.innerText = "Added to list!";
@@ -257,7 +347,6 @@
                 statusEl.style.color = "#f44336";
             }
 
-            // Restore UI
             scanBtn.disabled = false;
             setTimeout(() => {
                 if (statusEl.innerText === "Added to list!" || statusEl.innerText === "No text found in box.") {
@@ -267,7 +356,6 @@
             }, 2500);
         });
 
-        // Copy Button Listener
         copyBtn.addEventListener('click', async () => {
             if (!outputEl.value) return;
             try {
@@ -280,14 +368,12 @@
             }
         });
 
-        // Clear Button Listener
         clearBtn.addEventListener('click', () => {
             outputEl.value = "";
             statusEl.innerText = "List cleared. Ready.";
             statusEl.style.color = "#4CAF50";
         });
 
-        // Bootstrap the app
         window.addEventListener('load', initApp);
     </script>
 </body>
